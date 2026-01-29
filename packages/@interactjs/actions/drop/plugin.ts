@@ -52,6 +52,12 @@ export interface DropzoneMethod {
   (): DropzoneOptions
 }
 
+// HVS: Modification so we just pick closest valid dropzone to our finger our mouse cursor.
+export interface DropCheckResult {
+  dropped: boolean
+  pointerDistanceSquared: number
+}
+
 declare module '@interactjs/core/Interactable' {
   interface Interactable {
     /**
@@ -119,7 +125,7 @@ declare module '@interactjs/core/Interactable' {
       draggableElement: Element,
       dropElemen: Element,
       rect: any,
-    ): boolean
+    ): DropCheckResult // HVS: Modification so we just pick closest valid dropzone to our finger our mouse cursor.
   }
 }
 
@@ -322,7 +328,7 @@ function getDrop(
   dragEvent,
   pointerEvent,
 ) {
-  const validDrops: Element[] = []
+  /* const validDrops: Element[] = []
 
   // collect all dropzones and their elements which qualify for a drop
   for (const { dropzone, element: dropzoneElement, rect } of dropState.activeDrops) {
@@ -340,7 +346,33 @@ function getDrop(
   // get the most appropriate dropzone based on DOM depth and order
   const dropIndex = domUtils.indexOfDeepestElement(validDrops)
 
-  return dropState!.activeDrops[dropIndex] || null
+  return dropState!.activeDrops[dropIndex] || null */
+
+  // HVS: Modification so we just pick closest valid dropzone to our finger our mouse cursor.
+  let closestDropzoneIndex = -1
+  let closestDistanceSeen = Number.MAX_VALUE
+
+  // collect all dropzones and their elements which qualify for a drop
+  let index = 0
+  for (const { dropzone, element: dropzoneElement, rect } of dropState.activeDrops) {
+    const dropCheckResult = dropzone.dropCheck(
+      dragEvent,
+      pointerEvent,
+      draggable!,
+      dragElement!,
+      dropzoneElement,
+      rect,
+    )
+
+    if (dropCheckResult.dropped && dropCheckResult.pointerDistanceSquared < closestDistanceSeen) {
+      closestDistanceSeen = dropCheckResult.pointerDistanceSquared
+      closestDropzoneIndex = index
+    }
+
+    index++
+  }
+
+  return (closestDropzoneIndex >= 0 && dropState!.activeDrops[closestDropzoneIndex]) || null
 }
 
 function getDropEvents(interaction: Interaction, _pointerEvent, dragEvent: DragEvent) {
@@ -538,8 +570,8 @@ function dropCheckMethod(
   draggableElement: Element,
   dropElement: Element,
   rect: any,
-) {
-  let dropped = false
+): DropCheckResult {
+  /* let dropped = false
 
   // if the dropzone has no rect (eg. display: none)
   // call the custom dropChecker or just return false
@@ -603,7 +635,71 @@ function dropCheckMethod(
     )
   }
 
-  return dropped
+  return dropped */
+
+  // HVS: Modification to pick closest valid dropzone instead.
+  // Assume can drop unless a custom checker function tells us otherwise.
+  let dropped = true
+
+  // if the dropzone has no rect (eg. display: none)
+  // call the custom dropChecker or just return false
+  if (!(rect = rect || interactable.getRect(dropElement))) {
+    return {
+      dropped: interactable.options.drop.checker
+        ? interactable.options.drop.checker(
+            dragEvent,
+            event,
+            dropped,
+            interactable,
+            dropElement,
+            draggable,
+            draggableElement,
+          )
+        : false,
+      pointerDistanceSquared: Number.MAX_SAFE_INTEGER,
+    }
+  }
+
+  let pointerDistanceSquared = Number.MAX_VALUE
+  if (interactable.options.drop.checker) {
+    // Call custom drop checker.
+    dropped = interactable.options.drop.checker(
+      dragEvent,
+      event,
+      dropped,
+      interactable,
+      dropElement,
+      draggable,
+      draggableElement,
+    )
+  }
+
+  // No point in calculating pointer distance if we can't even drop here.
+  if (dropped) {
+    const dropRectPos = {
+      x: rect.left + rect.width * 0.5,
+      y: rect.top + rect.height * 0.5,
+    }
+
+    const origin = getOriginXY(draggable, draggableElement, 'drag')
+    const pointerPos = pointerUtils.getPageXY(dragEvent)
+
+    pointerPos.x += origin.x
+    pointerPos.y += origin.y
+
+    const pointerDir = {
+      x: pointerPos.x - dropRectPos.x,
+      y: pointerPos.y - dropRectPos.y,
+    }
+
+    // Pass pointer distance along so dropzone loop can pick the closest valid one.
+    pointerDistanceSquared = pointerDir.x * pointerDir.x + pointerDir.y * pointerDir.y
+  }
+
+  return {
+    dropped,
+    pointerDistanceSquared,
+  }
 }
 
 const drop: Plugin = {
