@@ -55,7 +55,7 @@ export interface DropzoneMethod {
 // HVS: Modification so we just pick closest valid dropzone to our finger our mouse cursor.
 export interface DropCheckResult {
   dropped: boolean
-  pointerDistanceSquared: number
+  draggableDistanceSquared: number
 }
 
 declare module '@interactjs/core/Interactable' {
@@ -364,8 +364,8 @@ function getDrop(
       rect,
     )
 
-    if (dropCheckResult.dropped && dropCheckResult.pointerDistanceSquared < closestDistanceSeen) {
-      closestDistanceSeen = dropCheckResult.pointerDistanceSquared
+    if (dropCheckResult.dropped && dropCheckResult.draggableDistanceSquared < closestDistanceSeen) {
+      closestDistanceSeen = dropCheckResult.draggableDistanceSquared
       closestDropzoneIndex = index
     }
 
@@ -656,11 +656,11 @@ function dropCheckMethod(
             draggableElement,
           )
         : false,
-      pointerDistanceSquared: Number.MAX_SAFE_INTEGER,
+      draggableDistanceSquared: Number.MAX_SAFE_INTEGER,
     }
   }
 
-  let pointerDistanceSquared = Number.MAX_VALUE
+  let draggableDistanceSquared = Number.MAX_VALUE
   if (interactable.options.drop.checker) {
     // Call custom drop checker.
     dropped = interactable.options.drop.checker(
@@ -676,29 +676,30 @@ function dropCheckMethod(
 
   // No point in calculating pointer distance if we can't even drop here.
   if (dropped) {
+    const dragRect = draggable.getRect(draggableElement)
+    const draggablePos = {
+      x: dragRect.left + dragRect.width * 0.5,
+      y: dragRect.top + dragRect.height * 0.5,
+    }
+
     const dropRectPos = {
       x: rect.left + rect.width * 0.5,
       y: rect.top + rect.height * 0.5,
     }
 
-    const origin = getOriginXY(draggable, draggableElement, 'drag')
-    const pointerPos = pointerUtils.getPageXY(dragEvent)
-
-    pointerPos.x += origin.x
-    pointerPos.y += origin.y
-
-    const pointerDir = {
-      x: pointerPos.x - dropRectPos.x,
-      y: pointerPos.y - dropRectPos.y,
+    const directionToDraggable = {
+      x: draggablePos.x - dropRectPos.x,
+      y: draggablePos.y - dropRectPos.y,
     }
 
-    // Pass pointer distance along so dropzone loop can pick the closest valid one.
-    pointerDistanceSquared = pointerDir.x * pointerDir.x + pointerDir.y * pointerDir.y
+    // Pass draggable distance along so dropzone loop can pick closest valid one.
+    draggableDistanceSquared =
+      directionToDraggable.x * directionToDraggable.x + directionToDraggable.y * directionToDraggable.y
   }
 
   return {
     dropped,
-    pointerDistanceSquared,
+    draggableDistanceSquared,
   }
 }
 
