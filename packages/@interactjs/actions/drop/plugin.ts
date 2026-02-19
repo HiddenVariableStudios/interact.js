@@ -676,11 +676,10 @@ function dropCheckMethod(
 
   // No point in calculating pointer distance if we can't even drop here.
   if (dropped) {
-    const dragRect = draggable.getRect(draggableElement)
-    const draggablePos = {
-      x: dragRect.left + dragRect.width * 0.5,
-      y: dragRect.top + dragRect.height * 0.5,
-    }
+    const origin = getOriginXY(draggable, draggableElement, 'drag')
+    const pointerPos = pointerUtils.getPageXY(dragEvent)
+    pointerPos.x += origin.x
+    pointerPos.y += origin.y
 
     const dropRectPos = {
       x: rect.left + rect.width * 0.5,
@@ -688,8 +687,8 @@ function dropCheckMethod(
     }
 
     const directionToDraggable = {
-      x: draggablePos.x - dropRectPos.x,
-      y: draggablePos.y - dropRectPos.y,
+      x: pointerPos.x - dropRectPos.x,
+      y: pointerPos.y - dropRectPos.y,
     }
 
     // Pass draggable distance along so dropzone loop can pick closest valid one.
